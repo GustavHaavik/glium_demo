@@ -11,6 +11,8 @@ use winit::event::WindowEvent;
 use winit::keyboard::KeyCode;
 use winit::keyboard::PhysicalKey;
 
+mod teapot;
+
 #[macro_use]
 extern crate glium;
 fn main() {
@@ -20,15 +22,27 @@ fn main() {
     let shape = vec![
         Vertex {
             position: [-0.5, -0.5],
-            color: [1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [0.0, 0.5],
-            color: [0.0, 1.0, 0.0],
+            tex_coords: [0.0, 0.0],
         },
         Vertex {
             position: [0.5, -0.5],
-            color: [0.0, 0.0, 1.0],
+            tex_coords: [1.0, 0.0],
+        },
+        Vertex {
+            position: [0.5, 0.5],
+            tex_coords: [1.0, 1.0],
+        },
+        Vertex {
+            position: [0.5, 0.5],
+            tex_coords: [1.0, 1.0],
+        },
+        Vertex {
+            position: [-0.5, 0.5],
+            tex_coords: [0.0, 1.0],
+        },
+        Vertex {
+            position: [-0.5, -0.5],
+            tex_coords: [0.0, 0.0],
         },
     ];
 
@@ -39,13 +53,13 @@ fn main() {
         #version 150
 
         in vec2 position;
-        in vec3 color;      // our new attribute
-        out vec3 vertex_color;
+        in vec2 tex_coords;
+        out vec2 v_tex_coords;
 
         uniform mat4 matrix;
 
         void main() {
-            vertex_color = color; // we need to set the value of each `out` variable.
+            v_tex_coords = tex_coords;
             gl_Position = matrix * vec4(position, 0.0, 1.0);
         }
     "#;
@@ -53,18 +67,30 @@ fn main() {
     let fragment_shader_src = r#"
         #version 150
 
-        in vec3 vertex_color;
+        in vec2 v_tex_coords;
         out vec4 color;
 
+        uniform sampler2D tex;
+
         void main() {
-            color = vec4(vertex_color, 1.0);   // We need an alpha value as well
+            color = texture(tex, v_tex_coords);
         }
     "#;
 
     let program =
         Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-    let mut t: f32 = 0.0;
+    let image = image::load(
+        std::io::Cursor::new(&include_bytes!("../assets/meandcat.jpg")[..]),
+        image::ImageFormat::Jpeg,
+    )
+    .unwrap()
+    .to_rgba8();
+    let image_dimensions = image.dimensions();
+    let image =
+        glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dimensions);
+
+    let texture = glium::texture::SrgbTexture2d::new(&display, image).unwrap();
 
     let _ = event_loop.run(move |event, elwt| {
         match event {
@@ -87,24 +113,12 @@ fn main() {
                 elwt.exit();
             }
             Event::AboutToWait => {
-                // Application update code.
-
-                // Queue a RedrawRequested event.
-                //
-                // You only need to call this if you've determined that you need to redraw in
-                // applications which do not always need to. Applications that redraw continuously
-                // can render here instead.
                 window.request_redraw();
             }
             Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,
                 ..
             } => {
-                // Draw triangle
-                t += 0.08;
-
-                let x = t.sin() * 0.5;
-
                 let mut frame = display.draw();
                 frame.clear_color(0.0, 0.0, 1.0, 1.0);
 
@@ -114,7 +128,8 @@ fn main() {
                         [0.0, 1.0, 0.0, 0.0],
                         [0.0, 0.0, 1.0, 0.0],
                         [0.0, 0.0, 0.0, 1.0f32],
-                    ]
+                    ],
+                    tex: &texture,
                 };
 
                 frame
@@ -140,6 +155,7 @@ fn main() {
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 2],
-    color: [f32; 3],
+    tex_coords: [f32; 2],
 }
-implement_vertex!(Vertex, position, color);
+
+implement_vertex!(Vertex, position, tex_coords);
