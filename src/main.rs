@@ -1,6 +1,9 @@
 use glium::backend::glutin::SimpleWindowBuilder;
 use glium::index::NoIndices;
 use glium::index::PrimitiveType;
+use glium::Depth;
+use glium::DepthTest;
+use glium::DrawParameters;
 use glium::Program;
 use glium::Surface;
 use glium::VertexBuffer;
@@ -34,20 +37,29 @@ fn main() {
         in vec3 position;
         in vec3 normal;
 
+        out vec3 v_normal;
+
+        uniform mat4 perspective;       // new
         uniform mat4 matrix;
 
         void main() {
-            gl_Position = matrix * vec4(position, 1.0);
+            v_normal = transpose(inverse(mat3(matrix))) * normal;
+            gl_Position = perspective * matrix * vec4(position, 1.0);       // new
         }
     "#;
 
     let fragment_shader_src = r#"
         #version 150
 
+        in vec3 v_normal;
         out vec4 color;
+        uniform vec3 u_light;
 
         void main() {
-            color = vec4(1.0, 0.0, 0.0, 1.0);
+            float brightness = dot(normalize(v_normal), normalize(u_light));
+            vec3 dark_color = vec3(0.6, 0.0, 0.0);
+            vec3 regular_color = vec3(1.0, 0.0, 0.0);
+            color = vec4(mix(dark_color, regular_color, brightness), 1.0);
         }
     "#;
 
@@ -94,22 +106,52 @@ fn main() {
                 ..
             } => {
                 let mut frame = display.draw();
-                frame.clear_color(0.0, 0.0, 1.0, 1.0);
+                frame.clear_color_and_depth((0.0, 0.0, 1.0, 1.0), 1.0);
 
                 let matrix = [
                     [0.01, 0.0, 0.0, 0.0],
                     [0.0, 0.01, 0.0, 0.0],
                     [0.0, 0.0, 0.01, 0.0],
-                    [0.0, 0.0, 0.0, 1.0f32],
+                    [0.0, 0.0, 2.5, 1.0f32],
                 ];
+
+                let perspective = {
+                    let (width, height) = frame.get_dimensions();
+                    let aspect_ratio = height as f32 / width as f32;
+
+                    let fov: f32 = 3.141592 / 3.0;
+                    let zfar = 1024.0;
+                    let znear = 0.1;
+
+                    let f = 1.0 / (fov / 2.0).tan();
+
+                    [
+                        [f * aspect_ratio, 0.0, 0.0, 0.0],
+                        [0.0, f, 0.0, 0.0],
+                        [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
+                        [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0],
+                    ]
+                };
+
+                // the direction of the light
+                let light = [-1.0, 0.4, 0.9f32];
+
+                let params = DrawParameters {
+                    depth: Depth {
+                        test: DepthTest::IfLess,
+                        write: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
 
                 frame
                     .draw(
                         (&positions, &normals),
                         &indices,
                         &program,
-                        &uniform! { matrix: matrix },
-                        &Default::default(),
+                        &uniform! { matrix: matrix, perspective: perspective, u_light: light },
+                        &params,
                     )
                     .unwrap();
 
