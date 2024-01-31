@@ -19,61 +19,35 @@ fn main() {
     let event_loop = winit::event_loop::EventLoopBuilder::new().build().unwrap();
     let (window, display) = SimpleWindowBuilder::new().build(&event_loop);
 
-    let shape = vec![
-        Vertex {
-            position: [-0.5, -0.5],
-            tex_coords: [0.0, 0.0],
-        },
-        Vertex {
-            position: [0.5, -0.5],
-            tex_coords: [1.0, 0.0],
-        },
-        Vertex {
-            position: [0.5, 0.5],
-            tex_coords: [1.0, 1.0],
-        },
-        Vertex {
-            position: [0.5, 0.5],
-            tex_coords: [1.0, 1.0],
-        },
-        Vertex {
-            position: [-0.5, 0.5],
-            tex_coords: [0.0, 1.0],
-        },
-        Vertex {
-            position: [-0.5, -0.5],
-            tex_coords: [0.0, 0.0],
-        },
-    ];
-
-    let vertex_buffer = VertexBuffer::new(&display, &shape).unwrap();
-    let indices = NoIndices(PrimitiveType::TrianglesList);
+    let positions = glium::VertexBuffer::new(&display, &teapot::VERTICES).unwrap();
+    let normals = glium::VertexBuffer::new(&display, &teapot::NORMALS).unwrap();
+    let indices = glium::IndexBuffer::new(
+        &display,
+        glium::index::PrimitiveType::TrianglesList,
+        &teapot::INDICES,
+    )
+    .unwrap();
 
     let vertex_shader_src = r#"
         #version 150
 
-        in vec2 position;
-        in vec2 tex_coords;
-        out vec2 v_tex_coords;
+        in vec3 position;
+        in vec3 normal;
 
         uniform mat4 matrix;
 
         void main() {
-            v_tex_coords = tex_coords;
-            gl_Position = matrix * vec4(position, 0.0, 1.0);
+            gl_Position = matrix * vec4(position, 1.0);
         }
     "#;
 
     let fragment_shader_src = r#"
         #version 150
 
-        in vec2 v_tex_coords;
         out vec4 color;
 
-        uniform sampler2D tex;
-
         void main() {
-            color = texture(tex, v_tex_coords);
+            color = vec4(1.0, 0.0, 0.0, 1.0);
         }
     "#;
 
@@ -122,22 +96,19 @@ fn main() {
                 let mut frame = display.draw();
                 frame.clear_color(0.0, 0.0, 1.0, 1.0);
 
-                let uniforms = uniform! {
-                    matrix: [
-                        [ 1.0, 0.0, 0.0, 0.0 ],
-                        [0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0f32],
-                    ],
-                    tex: &texture,
-                };
+                let matrix = [
+                    [0.01, 0.0, 0.0, 0.0],
+                    [0.0, 0.01, 0.0, 0.0],
+                    [0.0, 0.0, 0.01, 0.0],
+                    [0.0, 0.0, 0.0, 1.0f32],
+                ];
 
                 frame
                     .draw(
-                        &vertex_buffer,
+                        (&positions, &normals),
                         &indices,
                         &program,
-                        &uniforms,
+                        &uniform! { matrix: matrix },
                         &Default::default(),
                     )
                     .unwrap();
